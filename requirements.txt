@@ -1,0 +1,12 @@
+# PyTorch - Install CPU or GPU version based on your needs
+# For CPU-only: pip install torch>=2.0.0
+# For GPU (CUDA): Visit https://pytorch.org/get-started/locally/ for CUDA-specific installation
+# Example for CUDA 11.8: pip install torch --index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+tqdm>=4.65.0
+scipy>=1.10.0
