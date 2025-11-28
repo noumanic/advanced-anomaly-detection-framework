@@ -44,8 +44,12 @@ checkpoints/
 *.pth
 *.pkl
 
-# Data (if large)
-# dataset/*.csv
+# Data (tracked by DVC)
+dataset/*.csv
+dataset/**/*.csv
+.dvc/cache/
+.dvc/tmp/
+.dvc/config.local
 
 # Logs
 *.log
