@@ -1,0 +1,81 @@
+============================================================
+RAW DATASET STATISTICAL SUMMARY
+============================================================
+
+Dataset Shape: (200000, 10)
+Date Range: 2012-07-06 12:00:00 to 2014-02-28 00:00:00
+Time Span: 601 days
+Unique Customers: 8
+
+Column Information:
+------------------------------------------------------------
+
+LCLid:
+  Type: object
+  Non-null count: 200000
+  Null count: 0
+
+stdorToU:
+  Type: object
+  Non-null count: 200000
+  Null count: 0
+
+DateTime:
+  Type: datetime64[ns]
+  Non-null count: 200000
+  Null count: 0
+
+KWH/hh (per half hour):
+  Type: float64
+  Non-null count: 199993
+  Null count: 7
+  Mean: 0.1256
+  Std: 0.1782
+  Min: 0.0000
+  25%: 0.0320
+  50%: 0.0600
+  75%: 0.1330
+  Max: 2.8680
+
+hour:
+  Type: int32
+  Non-null count: 200000
+  Null count: 0
+
+day_of_week:
+  Type: int32
+  Non-null count: 200000
+  Null count: 0
+
+day_of_month:
+  Type: int32
+  Non-null count: 200000
+  Null count: 0
+
+month:
+  Type: int32
+  Non-null count: 200000
+  Null count: 0
+
+year:
+  Type: int32
+  Non-null count: 200000
+  Null count: 0
+
+date:
+  Type: object
+  Non-null count: 200000
+  Null count: 0
+
+
+Energy Consumption Detailed Statistics:
+------------------------------------------------------------
+count    199993.000000
+mean          0.125626
+std           0.178246
+min           0.000000
+25%           0.032000
+50%           0.060000
+75%           0.133000
+max           2.868000
+Name: KWH/hh (per half hour), dtype: float64

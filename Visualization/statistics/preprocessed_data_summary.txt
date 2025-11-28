@@ -1,0 +1,145 @@
+============================================================
+PREPROCESSED DATA STATISTICAL SUMMARY
+============================================================
+
+Training Sequences Shape: (799920, 100, 7)
+Test Sequences Shape: (199981, 100, 7)
+Number of Features: 7
+Feature Names: energy, hour, day_of_week, day_of_month, month, rolling_mean, rolling_std
+
+Feature Statistics (Before Normalization):
+------------------------------------------------------------
+
+energy:
+  Mean: 0.1690
+  Std: 0.2341
+  Min: 0.0000
+  Max: 3.5900
+
+hour:
+  Mean: 0.4999
+  Std: 0.3011
+  Min: 0.0000
+  Max: 1.0000
+
+day_of_week:
+  Mean: 0.4998
+  Std: 0.3335
+  Min: 0.0000
+  Max: 1.0000
+
+day_of_month:
+  Mean: 0.5101
+  Std: 0.2824
+  Min: 0.0323
+  Max: 1.0000
+
+month:
+  Mean: 0.5765
+  Std: 0.2988
+  Min: 0.0833
+  Max: 1.0000
+
+rolling_mean:
+  Mean: 0.1690
+  Std: 0.0844
+  Min: 0.0299
+  Max: 0.6905
+
+rolling_std:
+  Mean: 0.1869
+  Std: 0.1130
+  Min: 0.0000
+  Max: 0.8175
+
+
+Feature Statistics (After Normalization):
+------------------------------------------------------------
+
+energy:
+  Mean: -0.0000
+  Std: 1.0000
+  Min: -0.7218
+  Max: 14.6120
+
+hour:
+  Mean: -0.0000
+  Std: 1.0000
+  Min: -1.6599
+  Max: 1.6608
+
+day_of_week:
+  Mean: 0.0000
+  Std: 1.0000
+  Min: -1.4986
+  Max: 1.4998
+
+day_of_month:
+  Mean: -0.0000
+  Std: 1.0000
+  Min: -1.6924
+  Max: 1.7350
+
+month:
+  Mean: -0.0000
+  Std: 1.0000
+  Min: -1.6504
+  Max: 1.4172
+
+rolling_mean:
+  Mean: -0.0000
+  Std: 1.0000
+  Min: -1.6485
+  Max: 6.1815
+
+rolling_std:
+  Mean: -0.0000
+  Std: 1.0000
+  Min: -1.6544
+  Max: 5.5815
+
+
+Training Data Statistics:
+------------------------------------------------------------
+
+energy:
+  Mean: -0.0097
+  Std: 0.9866
+  Min: -0.7218
+  Max: 14.6120
+
+hour:
+  Mean: -0.0000
+  Std: 1.0001
+  Min: -1.6599
+  Max: 1.6608
+
+day_of_week:
+  Mean: 0.0001
+  Std: 1.0002
+  Min: -1.4986
+  Max: 1.4998
+
+day_of_month:
+  Mean: -0.0166
+  Std: 0.9990
+  Min: -1.6924
+  Max: 1.7350
+
+month:
+  Mean: -0.0067
+  Std: 0.8877
+  Min: -1.6504
+  Max: 1.4172
+
+rolling_mean:
+  Mean: -0.0268
+  Std: 0.9747
+  Min: -1.6485
+  Max: 6.1815
+
+rolling_std:
+  Mean: -0.0200
+  Std: 0.9895
+  Min: -1.6544
+  Max: 5.5815
