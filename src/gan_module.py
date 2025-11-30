@@ -44,8 +44,7 @@ class Generator(nn.Module):
             nn.ConvTranspose1d(hidden_dim // 2, hidden_dim // 4, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm1d(hidden_dim // 4),
             nn.ReLU(),
-            nn.ConvTranspose1d(hidden_dim // 4, output_dim, kernel_size=3, stride=1, padding=1),
-            nn.Tanh()
+            nn.ConvTranspose1d(hidden_dim // 4, output_dim, kernel_size=3, stride=1, padding=1)
         )
         
         # LSTM for temporal dependencies
@@ -79,6 +78,8 @@ class Generator(nn.Module):
         lstm_out, _ = self.lstm(x)
         x = self.fc_out(lstm_out)
         
+        # No Tanh - let the data distribution determine the range
+        # StandardScaler normalizes to mean=0, std=1, so we keep raw output
         return x
 
 

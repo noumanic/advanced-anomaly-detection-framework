@@ -54,21 +54,23 @@ class Trainer:
             weight_decay=weight_decay
         )
         
-        # GAN optimizers (if using GAN)
+            # GAN optimizers (if using GAN)
+        # Use lower learning rates for GAN to prevent instability
         if model.use_gan:
             self.gen_optimizer = optim.Adam(
                 model.gan.generator.parameters(),
-                lr=lr * 0.5,
+                lr=lr * 0.1,  # Much lower LR for generator
                 betas=(0.5, 0.999)
             )
             self.disc_optimizer = optim.Adam(
                 model.gan.discriminator.parameters(),
-                lr=lr * 0.5,
+                lr=lr * 0.2,  # Lower LR for discriminator
                 betas=(0.5, 0.999)
             )
         
-        # Loss weights
-        self.gan_weight = gan_weight
+        # Loss weights (adjusted for better balance)
+        # GAN loss is raw BCE, so needs much smaller weight
+        self.gan_weight = gan_weight * 0.1  # Scale down GAN weight
         self.contrastive_weight = contrastive_weight
         self.reconstruction_weight = reconstruction_weight
         
@@ -129,20 +131,31 @@ class Trainer:
             
             # Contrastive learning loss
             contrastive_loss = None
+            gen_loss = None
+            
             if self.model.use_contrastive:
-                # Create positive and negative samples
-                # Positive: slightly perturbed normal samples (augmented normal)
-                x_positive = x + torch.randn_like(x) * 0.01
+                # Improved contrastive sampling strategy
+                # Positive: augmented version with stronger perturbation
+                # Use geometric masking as positive augmentation
+                x_positive, _ = self.geometric_masking(x.clone())
                 outputs_positive = self.model(x_positive)
                 
-                # Negative: randomly shuffled samples (anomalous-like)
-                x_negative = x[torch.randperm(batch_size, device=self.device)]
+                # Negative: create more distinct negative samples
+                # Option 1: Time-shifted (creates temporal anomalies)
+                shift = self.model.seq_len // 4
+                x_negative = torch.roll(x, shifts=shift, dims=1)
+                # Option 2: Feature-shuffled (creates feature anomalies)
+                perm = torch.randperm(x.size(2), device=self.device)
+                x_negative = x[:, :, perm]
+                # Option 3: Add noise to create anomalies
+                x_negative = x_negative + torch.randn_like(x_negative) * 0.3
+                
                 outputs_negative = self.model(x_negative)
                 
                 # Get contrastive embeddings
                 # Anchor: current encoded sequence (normal)
-                # Positive: slightly perturbed (normal)
-                # Negative: shuffled (anomalous-like)
+                # Positive: augmented normal (should be similar)
+                # Negative: anomalous (should be different)
                 anchor_emb, _ = self.model.contrastive(encoded, encoded)  # (batch, proj_dim)
                 positive_emb, _ = self.model.contrastive(
                     encoded, outputs_positive['encoded']
@@ -160,40 +173,53 @@ class Trainer:
                 total_contrastive_loss += contrastive_loss.item()
             
             # GAN training (separate from main model)
+            # Train discriminator less frequently to balance with generator
             if self.model.use_gan:
-                # Train discriminator
+                # Train discriminator (every batch)
                 self.disc_optimizer.zero_grad()
                 
-                # Real data
+                # Real data - use label smoothing for stability
                 real_pred = self.model.gan.discriminate(x.detach())
-                real_target = torch.ones_like(real_pred, device=self.device)
+                real_target = torch.ones_like(real_pred, device=self.device) * 0.9  # Label smoothing
                 real_loss = self.bce_loss(real_pred, real_target)
                 
                 # Generated data
                 fake_data = self.model.gan.generate(batch_size, self.device)
                 fake_pred = self.model.gan.discriminate(fake_data.detach())
-                fake_target = torch.zeros_like(fake_pred, device=self.device)
+                fake_target = torch.ones_like(fake_pred, device=self.device) * 0.1  # Label smoothing
                 fake_loss = self.bce_loss(fake_pred, fake_target)
                 
                 disc_loss = (real_loss + fake_loss) / 2
                 disc_loss.backward()
+                # Clip discriminator gradients
+                torch.nn.utils.clip_grad_norm_(self.model.gan.discriminator.parameters(), max_norm=1.0)
                 self.disc_optimizer.step()
                 
                 total_disc_loss += disc_loss.item()
                 
-                # Train generator (separate backward pass)
-                self.gen_optimizer.zero_grad()
-                
-                # Generate new fake data for generator training
-                fake_data_gen = self.model.gan.generate(batch_size, self.device)
-                fake_pred_gen = self.model.gan.discriminate(fake_data_gen)
-                gen_target = torch.ones_like(fake_pred_gen, device=self.device)
-                gen_loss = self.bce_loss(fake_pred_gen, gen_target)
-                
-                gen_loss.backward()
-                self.gen_optimizer.step()
-                
-                total_gan_loss += gen_loss.item()
+                # Train generator (every batch, but with lower weight)
+                # Only train generator if discriminator is not too strong
+                if disc_loss.item() < 1.5:  # Only train gen if disc is not dominating
+                    self.gen_optimizer.zero_grad()
+                    
+                    # Generate new fake data for generator training
+                    fake_data_gen = self.model.gan.generate(batch_size, self.device)
+                    fake_pred_gen = self.model.gan.discriminate(fake_data_gen)
+                    gen_target = torch.ones_like(fake_pred_gen, device=self.device) * 0.9  # Label smoothing
+                    gen_loss = self.bce_loss(fake_pred_gen, gen_target)
+                    
+                    gen_loss.backward()
+                    # Clip generator gradients
+                    torch.nn.utils.clip_grad_norm_(self.model.gan.generator.parameters(), max_norm=1.0)
+                    self.gen_optimizer.step()
+                    
+                    total_gan_loss += gen_loss.item()
+                    gen_loss_value = gen_loss.item()
+                else:
+                    # Discriminator too strong, skip generator update
+                    gen_loss_value = 0.0
+                    total_gan_loss += 0.0
+                    gen_loss = torch.tensor(0.0, device=self.device)
             
             # Backward pass for main model (reconstruction + contrastive)
             self.optimizer.zero_grad()
@@ -202,9 +228,9 @@ class Trainer:
             self.optimizer.step()
             
             # Total loss for logging (includes all components)
+            # Don't add GAN loss to main loss - it's trained separately
             total_loss_batch = main_loss.item()
-            if self.model.use_gan:
-                total_loss_batch += self.gan_weight * gen_loss.item()
+            # GAN loss is tracked separately, not added to main loss
             
             # Accumulate losses
             total_loss += total_loss_batch

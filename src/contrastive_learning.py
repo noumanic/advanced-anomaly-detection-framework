@@ -15,11 +15,11 @@ class ContrastiveLoss(nn.Module):
     Enforces separation between normal and anomalous patterns
     """
     
-    def __init__(self, temperature: float = 0.07, margin: float = 1.0):
+    def __init__(self, temperature: float = 0.07, margin: float = 0.5):
         """
         Args:
             temperature: Temperature parameter for softmax
-            margin: Margin for contrastive loss
+            margin: Margin for contrastive loss (reduced for better gradients)
         """
         super().__init__()
         self.temperature = temperature
@@ -45,16 +45,23 @@ class ContrastiveLoss(nn.Module):
         positive = F.normalize(positive, p=2, dim=1)
         negative = F.normalize(negative, p=2, dim=1)
         
-        # Compute similarities
+        # Compute similarities (cosine similarity is in [-1, 1])
         pos_sim = F.cosine_similarity(anchor, positive, dim=1)
         neg_sim = F.cosine_similarity(anchor, negative, dim=1)
         
-        # Contrastive loss: maximize pos_sim, minimize neg_sim
-        # Using margin-based contrastive loss
+        # Improved contrastive loss with better gradient flow
+        # Pull positive pairs together (maximize similarity)
         pos_loss = torch.mean((1 - pos_sim) ** 2)
-        neg_loss = torch.mean(torch.clamp(neg_sim - self.margin, min=0) ** 2)
         
-        loss = pos_loss + neg_loss
+        # Push negative pairs apart (minimize similarity below margin)
+        # Use a smoother loss that doesn't collapse to zero
+        neg_loss = torch.mean(torch.clamp(self.margin - neg_sim, min=0) ** 2)
+        
+        # Add a small regularization term to prevent collapse
+        # Encourage diversity in embeddings
+        diversity_reg = 0.01 * torch.mean(torch.abs(pos_sim))
+        
+        loss = pos_loss + neg_loss + diversity_reg
         
         return loss
 

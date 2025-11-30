@@ -84,9 +84,9 @@ def main():
                        help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=1e-5,
                        help='Weight decay')
-    parser.add_argument('--gan_weight', type=float, default=0.1,
-                       help='Weight for GAN loss')
-    parser.add_argument('--contrastive_weight', type=float, default=0.1,
+    parser.add_argument('--gan_weight', type=float, default=0.01,
+                       help='Weight for GAN loss (reduced for stability)')
+    parser.add_argument('--contrastive_weight', type=float, default=0.5,
                        help='Weight for contrastive loss')
     parser.add_argument('--reconstruction_weight', type=float, default=1.0,
                        help='Weight for reconstruction loss')
@@ -241,66 +241,120 @@ def main():
         reconstruction_weight=args.reconstruction_weight
     )
     
-    # Train
+    # Create evaluator once (reused for all evaluations)
+    evaluator = Evaluator(model, device)
+    
+    # Function to evaluate and save results
+    def evaluate_and_save(epoch: int, is_final: bool = False):
+        """Evaluate model and save results"""
+        epoch_dir = output_dir if is_final else os.path.join(output_dir, f'epoch_{epoch}')
+        os.makedirs(epoch_dir, exist_ok=True)
+        
+        print(f"\n{'='*60}")
+        if is_final:
+            print("Final Evaluation")
+        else:
+            print(f"Evaluation at Epoch {epoch}")
+        print("="*60)
+        metrics = evaluator.evaluate(test_loader, labels=test_labels)
+        
+        print(f"Precision: {metrics['precision']:.4f}")
+        print(f"Recall: {metrics['recall']:.4f}")
+        print(f"F1 Score: {metrics['f1']:.4f}")
+        print(f"ROC-AUC: {metrics['roc_auc']:.4f}")
+        print(f"PR-AUC: {metrics['pr_auc']:.4f}")
+        print(f"Optimal Threshold: {metrics['threshold']:.4f}")
+        print("="*60)
+        
+        # Generate comprehensive evaluation visualizations
+        print("\nGenerating evaluation visualizations...")
+        scores, _ = evaluator.compute_anomaly_scores(test_loader)
+        predictions = metrics['predictions']
+        
+        # Generate all evaluation plots
+        evaluator.plot_comprehensive_evaluation(
+            scores=scores,
+            labels=test_labels,
+            predictions=predictions,
+            threshold=metrics['threshold'],
+            save_dir=epoch_dir
+        )
+        
+        # Save metrics
+        import json
+        metrics_to_save = {k: v for k, v in metrics.items() 
+                          if k not in ['anomaly_scores', 'predictions']}
+        metrics_to_save['epoch'] = epoch
+        metrics_path = os.path.join(epoch_dir, 'metrics.json')
+        with open(metrics_path, 'w') as f:
+            json.dump(metrics_to_save, f, indent=2)
+        print(f"Saved metrics to {metrics_path}")
+        
+        return metrics
+    
+    # Train with periodic evaluation
     print("Starting training...")
-    history = trainer.train(
-        train_loader=train_loader,
-        num_epochs=args.num_epochs,
-        save_dir=os.path.join(output_dir, 'checkpoints'),
-        save_every=args.save_every
-    )
+    print(f"Results will be saved every {args.save_every} epochs\n")
+    
+    history = {
+        'total_loss': [],
+        'reconstruction_loss': [],
+        'gan_loss': [],
+        'contrastive_loss': [],
+        'discriminator_loss': []
+    }
+    
+    for epoch in range(1, args.num_epochs + 1):
+        # Train one epoch
+        losses = trainer.train_epoch(train_loader, epoch)
+        
+        # Update history
+        for key in history:
+            history[key].append(losses.get(key, 0.0))
+        
+        # Save checkpoint
+        if epoch % args.save_every == 0:
+            checkpoint_dir = os.path.join(output_dir, 'checkpoints')
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_epoch_{epoch}.pt')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': trainer.optimizer.state_dict(),
+                'history': history
+            }, checkpoint_path)
+            print(f"\nSaved checkpoint to {checkpoint_path}")
+            
+            # Evaluate and save results
+            evaluate_and_save(epoch, is_final=False)
+            
+            # Save training history up to this point
+            history_path = os.path.join(output_dir, f'epoch_{epoch}', 'training_history.json')
+            with open(history_path, 'w') as f:
+                import json
+                json.dump(history, f, indent=2)
     
     # Save final model
     model_path = os.path.join(output_dir, 'final_model.pt')
     trainer.save_model(model_path)
-    print(f"Saved final model to {model_path}")
+    print(f"\nSaved final model to {model_path}")
     
-    # Evaluate
-    print("Evaluating model...")
-    evaluator = Evaluator(model, device)
-    metrics = evaluator.evaluate(test_loader, labels=test_labels)
+    # Final evaluation
+    final_metrics = evaluate_and_save(args.num_epochs, is_final=True)
     
-    print("\n" + "="*50)
-    print("Evaluation Results:")
-    print("="*50)
-    print(f"Precision: {metrics['precision']:.4f}")
-    print(f"Recall: {metrics['recall']:.4f}")
-    print(f"F1 Score: {metrics['f1']:.4f}")
-    print(f"ROC-AUC: {metrics['roc_auc']:.4f}")
-    print(f"PR-AUC: {metrics['pr_auc']:.4f}")
-    print(f"Optimal Threshold: {metrics['threshold']:.4f}")
-    print("="*50)
-    
-    # Generate comprehensive evaluation visualizations
-    print("\nGenerating evaluation visualizations...")
-    scores, _ = evaluator.compute_anomaly_scores(test_loader)
-    predictions = metrics['predictions']
-    
-    # Generate all evaluation plots
-    evaluator.plot_comprehensive_evaluation(
-        scores=scores,
-        labels=test_labels,
-        predictions=predictions,
-        threshold=metrics['threshold'],
-        save_dir=output_dir
-    )
-    
-    # Save metrics
-    import json
-    metrics_to_save = {k: v for k, v in metrics.items() 
-                      if k not in ['anomaly_scores', 'predictions']}
-    metrics_path = os.path.join(output_dir, 'metrics.json')
-    with open(metrics_path, 'w') as f:
-        json.dump(metrics_to_save, f, indent=2)
-    print(f"Saved metrics to {metrics_path}")
-    
-    # Save training history
+    # Save final training history
     history_path = os.path.join(output_dir, 'training_history.json')
     with open(history_path, 'w') as f:
+        import json
         json.dump(history, f, indent=2)
     print(f"Saved training history to {history_path}")
     
-    print(f"\nAll outputs saved to: {output_dir}")
+    print(f"\n{'='*60}")
+    print("Training Complete!")
+    print("="*60)
+    print(f"All outputs saved to: {output_dir}")
+    print(f"\nResults saved at epochs: {', '.join([str(e) for e in range(args.save_every, args.num_epochs + 1, args.save_every)] + [str(args.num_epochs)])}")
+    print("="*60)
 
 
 if __name__ == '__main__':
